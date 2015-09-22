@@ -47,7 +47,7 @@ $(function() {
         clients[data.id].updated = $.now();
     });
 
-    var prev = {};
+    var prev = {x: 0, y:0};
 
     canvas.on('mousedown', function(e) {
         e.preventDefault();
@@ -56,7 +56,7 @@ $(function() {
         prev.y = e.pageY;
 
         // hide the instructions
-        instructions.fadeOut();
+        // instructions.fadeOut();
     });
 
     doc.bind('mouseup mouseleave', function() {
@@ -74,13 +74,15 @@ $(function() {
                 'id': id
             });
             lastEmit = $.now();
+
         }
 
         if(drawing) {
             drawLine(prev.x, prev.y, e.pageX, e.pageY);
             prev.x = e.pageX;
-            prev.Y = e.pageY;
+            prev.y = e.pageY;
         }
+
     });
 
 
@@ -99,6 +101,7 @@ $(function() {
     }, 10000);
 
     function drawLine(fromx, fromy, tox, toy) {
+        console.log(fromx + " " + fromy);
         ctx.moveTo(fromx, fromy);
         ctx.lineTo(tox, toy);
         ctx.stroke();
