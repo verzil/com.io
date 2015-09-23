@@ -14,7 +14,7 @@ $(function() {
         instructions = $('#instructions');
 
 //--------- WebRTC------------------------------------------------
-    var localStream, pc
+    var localStream, pc, started = false, live = false
     
         // get user media navigator setup
     navigator.getUserMedia = navigator.getUserMedia 
@@ -33,7 +33,7 @@ $(function() {
 
     var RTCSessionDescription = window.RTCSessionDescription
                             || window.webkitRTCSessionDescription
-                            || window.mozRTCSessionDescription:
+                            || window.mozRTCSessionDescription;
 
         // document elements
     var localVideo = document.getElementById('localVideo'),
@@ -49,13 +49,22 @@ $(function() {
     callButton.onclick = call;
     hangupButton.disabled = true;
     hangupButton.onclick = hangup;
-    var live = false;
 
         // constrants
     var constraints = {
         video   : true,
         audio   : false
     }
+
+    socket.on('media', function(data) {
+        console.log(data);
+        if(data.type === "offer") {
+            gotOffer(data)
+        } else if (data.type === "answer") {
+            gotAnswer(data);
+        }
+        callButton.disabled = true;
+    });
 
     function successCallback(localMediaStream) {
         localStream = localMediaStream;
@@ -74,7 +83,7 @@ $(function() {
 
         //start getting local video stream
         navigator.getUserMedia(constraints, successCallback, failureCallback);
-        pc = RTCPeerConnection(servers);
+        pc = new  RTCPeerConnection(servers);
         pc.onicecandidate = gotIceCandidate;
         pc.onaddstream = gotRemoteStream;
     }
@@ -84,46 +93,54 @@ $(function() {
         
         pc.addStream(localStream);
 
-        pc.createOffer(gotLocalDescription, errHandler);
+        pc.createOffer(startOffer, errHandler);
     }
 
-    function gotLocalDescription(description) {
-        socket.emit('media', description);
-        pc.setLocalDescription(new RTCSessionDescription(description));
+    function startOffer(offer) {
+        if(!started) {
+            pc.setLocalDescription(new RTCSessionDescription(offer));
+            socket.emit('media', offer);
+            started = true;
+        }
     }
 
-    socket.on('media', function(data) {
-        console.log(data);
-        callButton.disabled = true;
-        gotRemoteDescription(data.sdp);
-        pc.createAnswer(gotRemoteDescription, errHandler);
-    });
+    function gotAnswer(description) {
+        if(!live)
+            pc.setRemoteDescription(new RTCSessionDescription(description))
+        live = true;
+    }
 
-    function gotRemoteDescription(description) {
-        pc.setRemoteDescription(new RTCSessionDescription(description));
-        socket.emit('media', description);
+
+    function gotOffer(description) {
+        pc.setRemoteDescription(new RTCSessionDescription(description), function() {
+            pc.createAnswer(function(answer) {
+                pc.setLocalDescription(answer);
+                if(!live)
+                    socket.emit('media', answer);
+                live = true;
+            }, errHandler);
+        });
     }
 
     function hangup() {
-        localPeerConnection.close();
-        remotePeerConnection.close();
-        localPeerConnection = null;
-        remotePeerConnection = null;
+        pc.close();
+        pc = null;
         hangupButton.disabled = true;
         callButton.disabled = false;
     }
 
     function gotRemoteStream(event) {
+        console.log("got remoteStream");
+        console.log(event.stream);
         remoteVideo.src = window.URL.createObjectURL(event.stream);
+        remoteVideo.play();
     }
 
-    function gotLocalIceCandidate(event) {
+    function gotIceCandidate(event) {
+        console.log("got candidate");
+        console.log(event.candidate);
         if(event.candidate)
-            remotePeerConnection.addIceCandidate(new RTCIceCandidate(event.candidate));
-    }
-    function gotRemoteIceCandidate(event) {
-        if(event.candidate)
-            localPeerConnection.addIceCandidate(new RTCIceCandidate(event.candidate));
+            pc.addIceCandidate(new RTCIceCandidate(event.candidate));
     }
 
     function errHandler(err) {
