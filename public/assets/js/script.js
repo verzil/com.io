@@ -5,12 +5,133 @@ $(function() {
     }
 
     var url = 'http://localhost:8080';
+    var socket = io.connect(url);
 
     var doc     = $(document),
         win     = $(window),
         canvas  = $('#paper'),
         ctx     = canvas[0].getContext('2d'),
         instructions = $('#instructions');
+
+//--------- WebRTC------------------------------------------------
+    var localStream, pc
+    
+        // get user media navigator setup
+    navigator.getUserMedia = navigator.getUserMedia 
+                            || navigator.mozGetUserMedia 
+                            || navigator.webkitGetUserMedia;
+    window.URL = window.URL 
+                || window.webkitURL 
+                || window.mozURL;
+    var RTCPeerConnection = window.RTCPeerConnection 
+                        || window.webkitRTCPeerConnection 
+                        || window.mozRTCPeerConnection;
+
+    var RTCIceCandidate = window.RTCIceCandidate 
+                    || window.webkitRTCIceCandidate
+                    || window.mozRTCIceCandidate;
+
+    var RTCSessionDescription = window.RTCSessionDescription
+                            || window.webkitRTCSessionDescription
+                            || window.mozRTCSessionDescription:
+
+        // document elements
+    var localVideo = document.getElementById('localVideo'),
+        remoteVideo = document.getElementById('remoteVideo'),
+        startButton = document.getElementById('start'),
+        hangupButton = document.getElementById('hangup'),
+        callButton = document.getElementById('call');
+
+        //button setup
+    startButton.disabled = false;
+    startButton.onclick = start;
+    callButton.disabled = true;
+    callButton.onclick = call;
+    hangupButton.disabled = true;
+    hangupButton.onclick = hangup;
+    var live = false;
+
+        // constrants
+    var constraints = {
+        video   : true,
+        audio   : false
+    }
+
+    function successCallback(localMediaStream) {
+        localStream = localMediaStream;
+        localVideo.src = window.URL.createObjectURL(localMediaStream);
+        callButton.disabled = false;
+        localVideo.play();
+    }
+
+    function failureCallback(err) {
+        console.log(err);
+    }
+
+    function start() {
+        var servers = null;
+        startButton.disabled = true;
+
+        //start getting local video stream
+        navigator.getUserMedia(constraints, successCallback, failureCallback);
+        pc = RTCPeerConnection(servers);
+        pc.onicecandidate = gotIceCandidate;
+        pc.onaddstream = gotRemoteStream;
+    }
+
+    function call() {
+        callButton.disabled = true;
+        
+        pc.addStream(localStream);
+
+        pc.createOffer(gotLocalDescription, errHandler);
+    }
+
+    function gotLocalDescription(description) {
+        socket.emit('media', description);
+        pc.setLocalDescription(new RTCSessionDescription(description));
+    }
+
+    socket.on('media', function(data) {
+        console.log(data);
+        callButton.disabled = true;
+        gotRemoteDescription(data.sdp);
+        pc.createAnswer(gotRemoteDescription, errHandler);
+    });
+
+    function gotRemoteDescription(description) {
+        pc.setRemoteDescription(new RTCSessionDescription(description));
+        socket.emit('media', description);
+    }
+
+    function hangup() {
+        localPeerConnection.close();
+        remotePeerConnection.close();
+        localPeerConnection = null;
+        remotePeerConnection = null;
+        hangupButton.disabled = true;
+        callButton.disabled = false;
+    }
+
+    function gotRemoteStream(event) {
+        remoteVideo.src = window.URL.createObjectURL(event.stream);
+    }
+
+    function gotLocalIceCandidate(event) {
+        if(event.candidate)
+            remotePeerConnection.addIceCandidate(new RTCIceCandidate(event.candidate));
+    }
+    function gotRemoteIceCandidate(event) {
+        if(event.candidate)
+            localPeerConnection.addIceCandidate(new RTCIceCandidate(event.candidate));
+    }
+
+    function errHandler(err) {
+        console.log(err);
+    }
+
+
+//------WebRTC end ---------------------
 
     // generate an unique ID (at least try to be)
     var id = Math.round($.now()*Math.random());
@@ -20,7 +141,6 @@ $(function() {
 
     var clients = {}, cursors = {};
 
-    var socket = io.connect(url);
 
     socket.on('moving', function(data) {
         if(!(data.id in clients)) {
