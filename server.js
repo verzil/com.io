@@ -31,8 +31,12 @@ io.sockets.on('connection', function(socket) {
     });
 
     socket.on('media', function(data) {
+<<<<<<< HEAD
         console.log('media was recieved');
         socket.broadcast.emit('media', data)
+=======
+        socket.broadcast.emit('media', data);
+>>>>>>> 9f5edf85b8343c470773ca04fbc06625fc189fd1
     })
 });
 
