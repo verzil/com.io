@@ -22,12 +22,18 @@ app.use(require('./server/routes.js'));
 
 // listen for incomming connection from clients
 io.sockets.on('connection', function(socket) {
+    console.log("connection on socket:", socket);
 
     //sends the event(broadcasting) it to everyone
     //except the origin
     socket.on('mousemove', function(data) {
         socket.broadcast.emit('moving', data);
     });
+
+    socket.on('media', function(data) {
+        console.log('media was recieved');
+        socket.broadcast.emit('media', data)
+    })
 });
 
 server.listen(8080);
